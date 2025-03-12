@@ -1,0 +1,332 @@
+#include "board.h"
+ChessBoard::ChessBoard() {//starting position
+	whiteTurn = true;
+	castlingRights = 0b00001111;
+	piece[0] = { pType::rook, true };
+	piece[1] = { pType::knight, true };
+	piece[2] = { pType::bishop, true };
+	piece[3] = { pType::queen, true };
+	piece[4] = { pType::king, true };
+	piece[5] = { pType::bishop, true };
+	piece[6] = { pType::knight, true };
+	piece[7] = { pType::rook, true };
+	byte i = 8;
+	while (i < 16) {
+		piece[i] = { pType::pawn, true };
+		i++;
+	}
+	while (i < 48) {
+		piece[i].type = pType::none;
+		i++;
+	}
+	while (i < 56) {
+		piece[i] = { pType::pawn, false };
+		i++;
+	}
+	piece[56] = { pType::rook, false };
+	piece[57] = { pType::knight, false };
+	piece[58] = { pType::bishop, false };
+	piece[59] = { pType::queen, false };
+	piece[60] = { pType::king, false };
+	piece[61] = { pType::bishop, false };
+	piece[62] = { pType::knight, false };
+	piece[63] = { pType::rook, false };
+}
+ChessBoard::ChessBoard(const ChessBoard& other) {
+	*this = other;
+}
+ChessBoard& ChessBoard::operator=(const ChessBoard& other) {
+	whiteTurn = other.whiteTurn;
+	castlingRights = other.castlingRights;
+	for (byte i = 0; i < 64; i++)
+		piece[i] = other.piece[i];
+	return *this;
+}
+inline int ChessBoard::endEval(endState end) {
+	switch (endState(end)) {
+	case endState::illegal:
+		return whiteTurn ? maxInf : -maxInf;
+	case endState::insuff_mat:
+	case endState::stalemate:
+		return 0;
+	default://checkmate
+		return whiteTurn ? -maxInf : maxInf;
+	}
+}
+void ChessBoard::doMove(const Move& move) {
+	piece[move.end] = piece[move.start];
+	piece[move.start].type = pType::none;
+	castlingRights -= whiteTurn ? moveCastling(move.extra) : moveCastling(move.extra) << 2;
+	switch (moveSpecial(move.extra)) {
+	case pType::none:
+		break;
+	case pType::pawn://en passant
+		if (whiteTurn)
+			piece[move.end - 8].type = pType::none;
+		else
+			piece[move.end + 8].type = pType::none;
+		break;
+	case pType::king://castling
+		if (move.end > move.start) {//short
+			piece[whiteTurn ? 7 : 63].type = pType::none;
+			piece[whiteTurn ? 5 : 61] = { pType::rook, whiteTurn };
+		}
+		else {//long
+			piece[whiteTurn ? 0 : 56].type = pType::none;
+			piece[whiteTurn ? 3 : 59] = { pType::rook, whiteTurn };
+		}
+		break;
+	default://promotion
+		piece[move.end].type = moveSpecial(move.extra);
+	}
+	whiteTurn = !whiteTurn;
+}
+void ChessBoard::unMove(const Move& move) {
+	piece[move.start] = piece[move.end];
+	piece[move.end] = { moveReplace(move.extra), whiteTurn };
+	whiteTurn = !whiteTurn;
+	castlingRights += whiteTurn ? moveCastling(move.extra) : moveCastling(move.extra) << 2;
+	switch (moveSpecial(move.extra)) {
+	case pType::none:
+		break;
+	case pType::pawn://en passant
+		if (whiteTurn)
+			piece[move.end - 8] = { pType::pawn, !whiteTurn };
+		else
+			piece[move.end + 8] = { pType::pawn, !whiteTurn };
+		break;
+	case pType::king://castling
+		if (move.end > move.start) {//short
+			piece[whiteTurn ? 7 : 63] = { pType::rook, whiteTurn };
+			piece[whiteTurn ? 5 : 61].type = pType::none;
+		}
+		else {//long
+			piece[whiteTurn ? 0 : 56] = { pType::rook, whiteTurn };
+			piece[whiteTurn ? 3 : 59].type = pType::none;
+		}
+		break;
+	default://promotion
+		piece[move.start].type = pType::pawn;
+	}
+}
+int ChessBoard::evaluation() {
+	int eval = 0;
+	bool wMat = false;
+	bool bMat = false;
+	bool insuff = true;
+	for (byte i = 0; i < 64; i++) {
+		switch (piece[i].type) {
+		case pType::none:
+			break;
+		case pType::pawn:
+			insuff = false;
+			eval += piece[i].isWhite ? 100 : -100;
+			break;
+		case pType::knight:
+		case pType::bishop:
+			if (piece[i].isWhite) {
+				if (wMat)
+					insuff = false;
+				else
+					wMat = true;
+				eval += 300;
+			}
+			else {
+				if (bMat)
+					insuff = false;
+				else
+					bMat = true;
+				eval += -300;
+			}
+			break;
+		case pType::rook:
+			insuff = false;
+			eval += piece[i].isWhite ? 500 : -500;
+			break;
+		case pType::queen:
+			insuff = false;
+			eval += piece[i].isWhite ? 900 : -900;
+			break;
+		default://king
+			if (isCheck(!whiteTurn, i))//illegal position
+				return whiteTurn ? maxInf : -maxInf;
+		}
+	}
+	if (insuff)
+		return 0;
+	return eval;
+}
+bool ChessBoard::isCheck(bool forWhite, byte kingPos) {
+	if (kingPos == 64) {//unknown
+		kingPos = 0;
+		while (piece[kingPos].type != pType::king || piece[kingPos].isWhite != forWhite)
+			kingPos++;
+	}
+	//-straight
+	//-diagonal
+	//-knight
+	//-pawn
+	return false;
+}
+byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
+	byte size = 0;
+	byte j = 0;
+	bool wMat = false;
+	bool bMat = false;
+	bool insuff = true;
+	for (byte i = 0; i < 64; i++) {
+		switch (piece[i].type) {//-set end, castling, special, size, insuff
+		case pType::none:
+			break;
+		case pType::pawn:
+			//-
+			break;
+		case pType::knight:
+			//-
+			break;
+		case pType::bishop:
+			//-
+			break;
+		case pType::rook:
+			//-
+			break;
+		case pType::queen:
+			//-
+			break;
+		case pType::king:
+			//-
+			;
+		}
+		for (; j < size; j++)
+			moves[j].start = i;
+	}
+	if (!size) {//no possibles
+		if (isCheck(whiteTurn))
+			return byte(endState::checkmate);
+		else
+			return byte(endState::stalemate);
+	}
+	pType capture;
+	Move temp;
+	j = 0;
+	for (byte i = 0; i < size; i++) {//hande captures
+		capture = piece[moves[i].end].type;
+		moves[i].extra += byte(capture) * 8;
+		switch (capture) {
+		case pType::none:
+			break;
+		case pType::king:
+			return byte(endState::illegal);
+		default://swap capture with first non capture
+			temp = moves[i];
+			moves[i] = moves[j];
+			moves[j++] = temp;
+		}
+	}
+	if (insuff)
+		return byte(endState::insuff_mat);
+	return size;
+}
+byte ChessBoard::legalMoves(Move* moves, Move* previous) {
+	byte size = possibleMoves(moves, previous);
+	if (size > maxMoves)//endState
+		return size;
+	byte i = 0;
+	Move tested;
+	while (i < size) {
+		tested = moves[i];
+		doMove(tested);
+		if (isCheck(!whiteTurn)) {//remove illegal
+			size--;
+			moves[i] = moves[size];
+		}
+		else
+			i++;
+		unMove(tested);
+	}
+	if (!size) {//all possibles are illegal
+		if (isCheck(whiteTurn))
+			return byte(endState::checkmate);
+		else
+			return byte(endState::stalemate);
+	}
+	return size;
+}
+int ChessBoard::deepEvaluation(byte depth, Move* previous) {
+	if (!depth)
+		return evaluation();
+	struct Node {
+		Move moves[maxMoves];
+		byte size, index;
+		int bestEval, minEval, maxEval;
+		inline Move& getMove() {
+			return moves[index];
+		}
+	};
+	Node* hist = new Node[depth];
+	hist[0].size = possibleMoves(hist[0].moves, previous);
+	int eval;
+	if (hist[0].size > maxMoves) {
+		eval = endEval(endState(hist[0].size));
+		delete[] hist;
+		return eval;
+	}
+	byte lvl = 0;
+	hist[0].index = 0;
+	hist[0].bestEval = whiteTurn ? -maxInf : maxInf;
+	hist[0].minEval = -maxInf;
+	hist[0].maxEval = maxInf;
+	while (true) {//explore downwards loop
+		doMove(hist[lvl++].getMove());
+		if (lvl == depth)
+			eval = evaluation();
+		else {
+			hist[lvl].size = possibleMoves(hist[lvl].moves, &hist[lvl - 1].getMove());
+			if (hist[lvl].size > maxMoves)
+				eval = endEval(endState(hist[lvl].size));
+			else {//init node
+				hist[lvl].index = 0;
+				if (whiteTurn) {
+					hist[lvl].bestEval = -maxInf;
+					hist[lvl].minEval = whiteConv(hist[lvl - 1].minEval);
+					hist[lvl].maxEval = whiteConv(min(hist[lvl - 1].maxEval, hist[lvl - 1].bestEval));
+				}
+				else {
+					hist[lvl].bestEval = maxInf;
+					hist[lvl].minEval = blackConv(max(hist[lvl - 1].minEval, hist[lvl - 1].bestEval));
+					hist[lvl].maxEval = blackConv(hist[lvl - 1].maxEval);
+				}
+				continue;//no eval yet
+			}
+		}
+		while (true) {//calculate upwards loop
+			unMove(hist[--lvl].getMove());
+			if (whiteTurn) {
+				hist[lvl].bestEval = max(hist[lvl].bestEval, eval);
+				if (++hist[lvl].index != hist[lvl].size && hist[lvl].bestEval < hist[lvl].maxEval)
+					break;//need more evals
+				eval = hist[lvl].bestEval;
+				if (eval > minInf)//distance white checkmate
+					eval--;
+				else if (eval == -maxInf)//check for stalemate
+					if (!isCheck(true))
+						eval = 0;
+			}
+			else {
+				hist[lvl].bestEval = min(hist[lvl].bestEval, eval);
+				if (++hist[lvl].index != hist[lvl].size && hist[lvl].bestEval > hist[lvl].minEval)
+					break;//need more evals
+				eval = hist[lvl].bestEval;
+				if (eval < -minInf)//distance black checkmate
+					eval++;
+				else if (eval == maxInf)//check for stalemate
+					if (!isCheck(false))
+						eval = 0;
+			}
+			if (!lvl) {//root eval found
+				delete[] hist;
+				return eval;
+			}
+		}
+	}
+}
