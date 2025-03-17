@@ -1,24 +1,41 @@
 #include <iostream>
-#include <string>
 #include "board.h"
+#define maxStr 6
 using namespace std;
-bool strToMove(const string inp, Move& outp);
-string moveToStr(const Move& move);
+bool strToByte(const char* inp, byte& outp);
+bool strToMove(const char* inp, Move& outp);
+void moveToStr(const Move& inp, char* outp);
+bool userInp(char* inp);
 int main() {
-	string textInp;
-	int depth;
+	char str[maxStr];
 	Move currentM;
 	ChessBoard* board = new ChessBoard;
 	Move* legals = new Move[maxMoves];
-	byte size;
+	byte size, depth;
 	bool botIsWhite;
-	cout << "ChessBot v1.0 by tx13" << endl;
-	do {
-		cout << "Set depth at: ";
-		cin >> depth;
-		std::cout << "Bot plays as (w/b): ";
-		cin >> textInp;
-		botIsWhite = textInp == "w";
+	cout << "ChessBot v1.0 by iliasTx13" << endl;
+	while (true) {
+		while (true) {
+			cout << "Set depth at: ";
+			if (userInp(str))
+				if (strToByte(str, depth))
+					break;
+			cout << "Declined: not an integer from 0 to 255" << endl;
+		}
+		while (true) {
+			cout << "Bot plays as: ";
+			if (userInp(str)) {
+				if (!strcmp(str, "white")) {
+					botIsWhite = true;
+					break;
+				}
+				if (!strcmp(str, "black")) {
+					botIsWhite = false;
+					break;
+				}
+			}
+			cout << "Declined: not white or black" << endl;
+		}
 		*board = ChessBoard();//starting position
 		size = board->legalMoves(legals);
 		while (true) {//main game loop
@@ -34,17 +51,21 @@ int main() {
 						currentM = legals[i];
 					}
 				}
-				cout << "Bot plays: " << moveToStr(currentM) << endl;
+				moveToStr(currentM, str);
+				cout << "Bot plays: " << str << endl;
 				cout << "Evaluation: " << bestEval << endl;
 			}
 			else {//opp's turn
 				cout << "Opponent plays: ";
-				cin >> textInp;
-				if (textInp == "end") {
+				if (!userInp(str)) {
+					cout << "Declined: Move not recognised" << endl;
+					continue;
+				}
+				if (!strcmp(str, "end")) {
 					cout << "Game terminated" << endl;
 					break;
 				}
-				if (!strToMove(textInp, currentM)) {
+				if (!strToMove(str, currentM)) {
 					cout << "Declined: Move not recognised" << endl;
 					continue;
 				}
@@ -61,14 +82,14 @@ int main() {
 				case pType::pawn:
 				case pType::king:
 					if (moveSpecial(currentM.extra) != pType::none) {
-						cout << "Declined: Invalid promotion" << endl;
+						cout << "Declined: Move is illegal" << endl;
 						continue;
 					}
 					currentM.extra = legals[i].extra;//both are non promotions
 					break;
 				default:
 					if (moveSpecial(currentM.extra) == pType::none) {
-						cout << "Declined: Promotion missing" << endl;
+						cout << "Declined: Move is illegal" << endl;
 						continue;
 					}
 					currentM.extra += legals[i].extra & 0b11111000;//both are promotions
@@ -93,27 +114,32 @@ int main() {
 				break;
 			}
 		}
-		cout << "Play new game? (y/n)" << endl;
-		cin >> textInp;
-	} while (textInp == "y");
-	delete board;
-	delete[] legals;
-	return 0;
+		while (true) {
+			cout << "Play new game? ";
+			if (userInp(str)) {
+				if (!strcmp(str, "yes"))
+					break;
+				if (!strcmp(str, "no")) {
+					delete board;
+					delete[] legals;
+					return 0;
+				}
+			}
+			cout << "Declined: not yes or no" << endl;
+		}
+	}
 }
-bool strToMove(const string inp, Move& outp) {
-	if (inp.size() != 4 && inp.size() != 5)
-		return false;
+bool strToMove(const char* inp, Move& outp) {
 	if (inp[0] < 'a' || inp[0] > 'h' || inp[1] < '1' || inp[1] > '8')
 		return false;
 	outp.start = inp[0] - 'a' + (inp[1] - '1') * 8;
 	if (inp[2] < 'a' || inp[2] > 'h' || inp[3] < '1' || inp[3] > '8')
 		return false;
 	outp.end = inp[2] - 'a' + (inp[3] - '1') * 8;
-	if (inp.size() == 4) {
+	switch (inp[4]) {
+	case '\0':
 		outp.extra = byte(pType::none);
 		return true;
-	}
-	switch (inp[4]) {
 	case 'n':
 		outp.extra = byte(pType::knight);
 		break;
@@ -129,26 +155,42 @@ bool strToMove(const string inp, Move& outp) {
 	default:
 		return false;
 	}
-	return true;
+	return inp[5] == '\0';
 }
-string moveToStr(const Move& move) {
-	string result;
-	result += posFile(move.start) + 'a';
-	result += posRank(move.start) + '1';
-	result += posFile(move.end) + 'a';
-	result += posRank(move.end) + '1';
-	switch (moveSpecial(move.extra)) {
+void moveToStr(const Move& inp, char* outp) {
+	outp[0] = posFile(inp.start) + 'a';
+	outp[1] = posRank(inp.start) + '1';
+	outp[2] = posFile(inp.end) + 'a';
+	outp[3] = posRank(inp.end) + '1';
+	switch (moveSpecial(inp.extra)) {
 	case pType::knight:
-		result += 'n';
+		outp[4] = 'n';
 		break;
 	case pType::bishop:
-		result += 'b';
+		outp[4] = 'b';
 		break;
 	case pType::rook:
-		result += 'r';
+		outp[4] = 'r';
 		break;
 	case pType::queen:
-		result += 'q';
+		outp[4] = 'q';
+		break;
+	default:
+		outp[4] = '\0';
+		return;
 	}
-	return result;
+	outp[5] = '\0';
+}
+bool userInp(char* inp) {
+	if (cin.getline(inp, maxStr, '\n'))
+		return true;
+	if (!(cin.eof() || cin.bad())) {
+		cin.clear();
+		if (cin.ignore(numeric_limits<streamsize>::max(), '\n'))
+			return false;
+	}
+	exit(1);
+}
+bool strToByte(const char* inp, byte& outp) {
+	//-todo
 }
