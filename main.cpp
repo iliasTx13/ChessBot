@@ -2,7 +2,7 @@
 #include "board.h"
 #define maxStr 6
 using namespace std;
-bool strToByte(const char* inp, byte& outp);
+bool strToByte(const char* inp, byte& outp, byte max = 255);
 bool strToMove(const char* inp, Move& outp);
 void moveToStr(const Move& inp, char* outp);
 bool userInp(char* inp);
@@ -191,7 +191,23 @@ bool userInp(char* inp) {
 	}
 	exit(1);
 }
-bool strToByte(const char* inp, byte& outp) {
-	//-todo
-	//another test
+bool strToByte(const char* inp, byte& outp, byte max) {
+	if (inp[0] == '0')
+		if (inp[1] != '\0')
+			return false;//only 0 can start with 0
+	int result = 0;//int to avoid overflow
+	for (byte i = 0; i < 3;) {
+		if (inp[i] < '0' || inp[i] > '9')
+			return false;
+		result = result * 10 + inp[i] - '0';
+		if (inp[++i] == '\0') {
+			if (result <= max) {
+				outp = result;
+				return true;
+			}
+			else
+				return false;
+		}
+	}
+	return false;//max 3 digits for byte
 }
