@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include "board.h"
 #define maxStr 6
 using namespace std;
@@ -13,6 +14,7 @@ int main() {
 	Move* legals = new Move[maxMoves];
 	byte size, depth;
 	bool botIsWhite;
+	cout << showpos << fixed << setprecision(3);//for eval
 	cout << "ChessBot v1.0 by iliasTx13" << endl;
 	while (true) {
 		while (true) {
@@ -53,7 +55,14 @@ int main() {
 				}
 				moveToStr(currentM, str);
 				cout << "Bot plays: " << str << endl;
-				cout << "Evaluation: " << bestEval << endl;
+				cout << "Evaluation: ";
+				if (bestEval > minInf)
+					cout << "+M" << maxInf - bestEval;
+				else if (bestEval < -minInf)
+					cout << "-M" << maxInf + bestEval;
+				else
+					cout << float(bestEval) / 100;
+				cout << endl;
 			}
 			else {//opp's turn
 				cout << "Opponent plays: ";

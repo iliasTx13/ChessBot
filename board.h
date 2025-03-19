@@ -1,8 +1,9 @@
 #pragma once
+#include <stdint.h>
 #define maxMoves 250//upper limit for possible moves
 #define maxInf 32000//eval for checkmate
-#define minInf 31000//max eval without checkmate in X
-typedef unsigned char byte;
+#define minInf 31000//max eval without checkmate in X (may not be enough for custom material)
+typedef uint_fast8_t byte;
 enum struct pType : byte {
 	none, pawn, knight, bishop, rook, queen, king
 };
