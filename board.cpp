@@ -170,35 +170,73 @@ bool ChessBoard::isCheck(bool forWhite, byte kingPos) {
 }
 byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 	byte size = 0;
-	byte j = 0;
-	bool wMat = false;
-	bool bMat = false;
-	bool insuff = true;
+	byte first = 0;//piece move
+	byte mat = 0;
 	for (byte i = 0; i < 64; i++) {
+		if (piece[i].isWhite != whiteTurn)
+			continue;
 		switch (piece[i].type) {//-set end, castling, special, size, insuff
 		case pType::none:
 			break;
 		case pType::pawn:
 			//-
+			mat = 2;
 			break;
 		case pType::knight:
-			//-
+			static const byte knightMoves[8] = {
+				-17, -15, -10, -6, 6, 10, 15, 17
+			};//overflow intented, works as negative here
+			byte inBoard = 0b11111111;//1 bit per move
+			switch (posFile(i)) {
+			case 0:
+				inBoard &= 0b10111110;
+			case 1:
+				inBoard &= 0b11101011;
+				break;
+			case 7:
+				inBoard &= 0b01111101;
+			case 6:
+				inBoard &= 0b11010111;
+			}
+			switch (posRank(i)) {
+			case 0:
+				inBoard &= 0b11110011;
+			case 1:
+				inBoard &= 0b11111100;
+				break;
+			case 7:
+				inBoard &= 0b11001111;
+			case 6:
+				inBoard &= 0b00111111;
+			}
+			for (byte j = 0; j < 8; j++) {
+				if ((inBoard >> j) % 2) {
+					if (piece[i + knightMoves[j]].type == pType::none || piece[i + knightMoves[j]].isWhite != whiteTurn)
+						moves[size++].end = i + knightMoves[j];
+				}
+			}
+			for (byte j = first; j< size; j++)
+				moves[j].extra = 0;//no castling changes or special moves
+			mat++;
 			break;
 		case pType::bishop:
 			//-
+			mat++;
 			break;
 		case pType::rook:
 			//-
+			mat = 2;
 			break;
 		case pType::queen:
 			//-
+			mat = 2;
 			break;
 		case pType::king:
 			//-
 			;
 		}
-		for (; j < size; j++)
-			moves[j].start = i;
+		for (; first < size; first++)
+			moves[first].start = i;
 	}
 	if (!size) {//no possibles
 		if (isCheck(whiteTurn))
@@ -208,7 +246,7 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 	}
 	pType capture;
 	Move temp;
-	j = 0;
+	first = 0;//non capture
 	for (byte i = 0; i < size; i++) {//hande captures
 		capture = piece[moves[i].end].type;
 		moves[i].extra += byte(capture) * 8;
@@ -219,11 +257,11 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 			return byte(endState::illegal);
 		default://swap capture with first non capture
 			temp = moves[i];
-			moves[i] = moves[j];
-			moves[j++] = temp;
+			moves[i] = moves[first];
+			moves[first++] = temp;
 		}
 	}
-	if (insuff)
+	if (mat > 1)
 		return byte(endState::insuff_mat);
 	return size;
 }
