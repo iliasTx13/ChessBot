@@ -24,6 +24,7 @@ class ChessBoard {
 	byte possibleMoves(Move* moves, Move* previous = nullptr);
 	int evaluation();
 	inline int endEval(endState end);
+	inline bool hasAlly(byte pos);
 public:
 	bool whiteTurn;
 	byte castlingRights;

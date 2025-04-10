@@ -53,6 +53,9 @@ inline int ChessBoard::endEval(endState end) {
 		return whiteTurn ? -maxInf : maxInf;
 	}
 }
+inline bool ChessBoard::hasAlly(byte pos) {
+	return piece[pos].type != pType::none && piece[pos].isWhite == whiteTurn;
+}
 void ChessBoard::doMove(const Move& move) {
 	piece[move.end] = piece[move.start];
 	piece[move.start].type = pType::none;
@@ -185,7 +188,7 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 		case pType::knight:
 			static const byte knightMoves[8] = {
 				-17, -15, -10, -6, 6, 10, 15, 17
-			};//overflow intented, works as negative here
+			};//overflow intented
 			byte inBoard = 0b11111111;//1 bit per move
 			switch (posFile(i)) {
 			case 0:
@@ -211,12 +214,12 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 			}
 			for (byte j = 0; j < 8; j++) {
 				if ((inBoard >> j) % 2) {
-					if (piece[i + knightMoves[j]].type == pType::none || piece[i + knightMoves[j]].isWhite != whiteTurn)
+					if (!hasAlly(i + knightMoves[j])) {
+						moves[size].extra = 0;
 						moves[size++].end = i + knightMoves[j];
+					}
 				}
 			}
-			for (byte j = first; j< size; j++)
-				moves[j].extra = 0;//no castling changes or special moves
 			mat++;
 			break;
 		case pType::bishop:
@@ -232,8 +235,33 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 			mat = 2;
 			break;
 		case pType::king:
-			//-
-			;
+			static const byte kingMoves[8] = {
+				1, -1, 8, -8, 7, -7, 9, -9
+			};//overflow intented
+			byte inBoard = 0b11111111;//1 bit per move
+			switch (posFile(i)) {
+			case 0:
+				inBoard &= 0b01001001;
+				break;
+			case 7:
+				inBoard &= 0b10000110;
+			}
+			switch (posRank(i)) {
+			case 0:
+				inBoard &= 0b01010101;
+				break;
+			case 7:
+				inBoard &= 0b10101010;
+			}
+			for (byte j = 0; j < 8; j++) {
+				if ((inBoard >> j) % 2) {
+					if (!hasAlly(i + kingMoves[j])) {
+						moves[size].extra = castlingRights >> (whiteTurn ? 0 : 2) << 6;
+						moves[size++].end = i + kingMoves[j];
+					}
+				}
+			}
+			//-check for castling
 		}
 		for (; first < size; first++)
 			moves[first].start = i;
@@ -249,7 +277,7 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 	first = 0;//non capture
 	for (byte i = 0; i < size; i++) {//hande captures
 		capture = piece[moves[i].end].type;
-		moves[i].extra += byte(capture) * 8;
+		moves[i].extra += byte(capture) << 3;
 		switch (capture) {
 		case pType::none:
 			break;
