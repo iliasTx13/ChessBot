@@ -1,7 +1,7 @@
 #include "board.h"
 ChessBoard::ChessBoard() {//starting position
 	whiteTurn = true;
-	castlingRights = 0b00001111;
+	castlingRights = 0b1111;
 	piece[0] = { pType::rook, true };
 	piece[1] = { pType::knight, true };
 	piece[2] = { pType::bishop, true };
@@ -59,7 +59,7 @@ inline bool ChessBoard::hasAlly(byte pos) {
 void ChessBoard::doMove(const Move& move) {
 	piece[move.end] = piece[move.start];
 	piece[move.start].type = pType::none;
-	castlingRights -= whiteTurn ? moveCastling(move.extra) : moveCastling(move.extra) << 2;
+	castlingRights -= moveCastling(move.extra) << (whiteTurn ? 0 : 2);
 	switch (moveSpecial(move.extra)) {
 	case pType::none:
 		break;
@@ -71,12 +71,12 @@ void ChessBoard::doMove(const Move& move) {
 		break;
 	case pType::king://castling
 		if (move.end > move.start) {//short
-			piece[whiteTurn ? 7 : 63].type = pType::none;
-			piece[whiteTurn ? 5 : 61] = { pType::rook, whiteTurn };
+			piece[move.end + 1].type = pType::none;
+			piece[move.end - 1] = { pType::rook, whiteTurn };
 		}
 		else {//long
-			piece[whiteTurn ? 0 : 56].type = pType::none;
-			piece[whiteTurn ? 3 : 59] = { pType::rook, whiteTurn };
+			piece[move.end - 2].type = pType::none;
+			piece[move.end + 1] = { pType::rook, whiteTurn };
 		}
 		break;
 	default://promotion
@@ -88,24 +88,24 @@ void ChessBoard::unMove(const Move& move) {
 	piece[move.start] = piece[move.end];
 	piece[move.end] = { moveReplace(move.extra), whiteTurn };
 	whiteTurn = !whiteTurn;
-	castlingRights += whiteTurn ? moveCastling(move.extra) : moveCastling(move.extra) << 2;
+	castlingRights += moveCastling(move.extra) << (whiteTurn ? 0 : 2);
 	switch (moveSpecial(move.extra)) {
 	case pType::none:
 		break;
 	case pType::pawn://en passant
 		if (whiteTurn)
-			piece[move.end - 8] = { pType::pawn, !whiteTurn };
+			piece[move.end - 8] = { pType::pawn, false };
 		else
-			piece[move.end + 8] = { pType::pawn, !whiteTurn };
+			piece[move.end + 8] = { pType::pawn, true };
 		break;
 	case pType::king://castling
 		if (move.end > move.start) {//short
-			piece[whiteTurn ? 7 : 63] = { pType::rook, whiteTurn };
-			piece[whiteTurn ? 5 : 61].type = pType::none;
+			piece[move.end + 1] = { pType::rook, whiteTurn };
+			piece[move.end - 1].type = pType::none;
 		}
 		else {//long
-			piece[whiteTurn ? 0 : 56] = { pType::rook, whiteTurn };
-			piece[whiteTurn ? 3 : 59].type = pType::none;
+			piece[move.end - 2] = { pType::rook, whiteTurn };
+			piece[move.end + 1].type = pType::none;
 		}
 		break;
 	default://promotion
@@ -241,17 +241,17 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 			byte inBoard = 0b11111111;//1 bit per move
 			switch (posFile(i)) {
 			case 0:
-				inBoard &= 0b01001001;
+				inBoard &= 0b10110110;
 				break;
 			case 7:
-				inBoard &= 0b10000110;
+				inBoard &= 0b01111001;
 			}
 			switch (posRank(i)) {
 			case 0:
-				inBoard &= 0b01010101;
+				inBoard &= 0b11101010;
 				break;
 			case 7:
-				inBoard &= 0b10101010;
+				inBoard &= 0b11010101;
 			}
 			for (byte j = 0; j < 8; j++) {
 				if ((inBoard >> j) % 2) {
@@ -261,7 +261,12 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 					}
 				}
 			}
-			//-check for castling
+			if (castlingRights & (whiteTurn ? 0b0001 : 0b0100)) {//short
+				//-check empty no check
+			}
+			if (castlingRights & (whiteTurn ? 0b0010 : 0b1000)) {//long
+				//-check empty no check
+			}
 		}
 		for (; first < size; first++)
 			moves[first].start = i;
