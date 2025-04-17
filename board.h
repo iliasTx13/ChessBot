@@ -18,16 +18,19 @@ struct Move {
 	byte start;
 	byte end;
 	byte extra;
+	byte casChange;
 };
 class ChessBoard {
 	bool isCheck(bool forWhite, byte kingPos = 64);
 	byte possibleMoves(Move* moves, Move* previous = nullptr);
 	int evaluation();
-	inline int endEval(endState end);
-	inline bool hasAlly(byte pos);
+	int endEval(endState end);
+	inline bool noAlly(byte pos);
+	bool canShort();
+	bool canLong();
 public:
-	bool whiteTurn;
-	byte castlingRights;
+	bool wTurn;
+	byte casRight;
 	Piece piece[64];
 	ChessBoard();
 	ChessBoard(const ChessBoard& other);
@@ -45,12 +48,6 @@ inline byte posRank(byte pos) {
 }
 inline pType moveSpecial(byte extra) {
 	return pType(extra % 8);
-}
-inline pType moveReplace(byte extra) {
-	return pType((extra >> 3) % 8);
-}
-inline byte moveCastling(byte extra) {
-	return extra >> 6;
 }
 inline int max(int a, int b) {
 	return a > b ? a : b;

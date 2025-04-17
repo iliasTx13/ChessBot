@@ -41,14 +41,14 @@ int main() {
 		*board = ChessBoard();//starting position
 		size = board->legalMoves(legals);
 		while (true) {//main game loop
-			if (board->whiteTurn == botIsWhite) {//bot's turn
-				int bestEval = board->whiteTurn ? -maxInf : maxInf;
+			if (board->wTurn == botIsWhite) {//bot's turn
+				int bestEval = board->wTurn ? -maxInf : maxInf;
 				int eval;
 				for (byte i = 0; i < size; i++) {
 					board->doMove(legals[i]);
 					eval = board->deepEvaluation(depth, &legals[i]);
 					board->unMove(legals[i]);
-					if (eval > bestEval == board->whiteTurn) {
+					if (eval > bestEval == board->wTurn) {
 						bestEval = eval;
 						currentM = legals[i];
 					}
@@ -109,7 +109,7 @@ int main() {
 			if (size > maxMoves) {//game ended
 				switch (endState(size)) {
 				case endState::checkmate:
-					cout << (board->whiteTurn == botIsWhite ? "Opp" : "Bot") << " wins by checkmate" << endl;
+					cout << (board->wTurn == botIsWhite ? "Opp" : "Bot") << " wins by checkmate" << endl;
 					break;
 				case endState::stalemate:
 					cout << "Draw by stalemate" << endl;

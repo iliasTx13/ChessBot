@@ -1,7 +1,7 @@
 #include "board.h"
 ChessBoard::ChessBoard() {//starting position
-	whiteTurn = true;
-	castlingRights = 0b1111;
+	wTurn = true;
+	casRight = 0b1111;
 	piece[0] = { pType::rook, true };
 	piece[1] = { pType::knight, true };
 	piece[2] = { pType::bishop, true };
@@ -36,35 +36,47 @@ ChessBoard::ChessBoard(const ChessBoard& other) {
 	*this = other;
 }
 ChessBoard& ChessBoard::operator=(const ChessBoard& other) {
-	whiteTurn = other.whiteTurn;
-	castlingRights = other.castlingRights;
+	wTurn = other.wTurn;
+	casRight = other.casRight;
 	for (byte i = 0; i < 64; i++)
 		piece[i] = other.piece[i];
 	return *this;
 }
-inline int ChessBoard::endEval(endState end) {
-	switch (endState(end)) {
+int ChessBoard::endEval(endState end) {
+	switch (end) {
 	case endState::illegal:
-		return whiteTurn ? maxInf : -maxInf;
+		return wTurn ? maxInf : -maxInf;
 	case endState::insuff_mat:
 	case endState::stalemate:
 		return 0;
 	default://checkmate
-		return whiteTurn ? -maxInf : maxInf;
+		return wTurn ? -maxInf : maxInf;
 	}
 }
-inline bool ChessBoard::hasAlly(byte pos) {
-	return piece[pos].type != pType::none && piece[pos].isWhite == whiteTurn;
+inline bool ChessBoard::noAlly(byte pos) {
+	return piece[pos].type == pType::none || piece[pos].isWhite != wTurn;
+}
+bool ChessBoard::canShort() {
+	if (!(casRight & (wTurn ? 0b0001 : 0b0100)))
+		return false;
+	//-more checks;
+	return true;
+}
+bool ChessBoard::canLong() {
+	if (!(casRight & (wTurn ? 0b0010 : 0b1000)))
+		return false;
+	//-more checks;
+	return true;
 }
 void ChessBoard::doMove(const Move& move) {
 	piece[move.end] = piece[move.start];
 	piece[move.start].type = pType::none;
-	castlingRights -= moveCastling(move.extra) << (whiteTurn ? 0 : 2);
+	casRight -= move.casChange;
 	switch (moveSpecial(move.extra)) {
 	case pType::none:
 		break;
 	case pType::pawn://en passant
-		if (whiteTurn)
+		if (wTurn)
 			piece[move.end - 8].type = pType::none;
 		else
 			piece[move.end + 8].type = pType::none;
@@ -72,39 +84,39 @@ void ChessBoard::doMove(const Move& move) {
 	case pType::king://castling
 		if (move.end > move.start) {//short
 			piece[move.end + 1].type = pType::none;
-			piece[move.end - 1] = { pType::rook, whiteTurn };
+			piece[move.end - 1] = { pType::rook, wTurn };
 		}
 		else {//long
 			piece[move.end - 2].type = pType::none;
-			piece[move.end + 1] = { pType::rook, whiteTurn };
+			piece[move.end + 1] = { pType::rook, wTurn };
 		}
 		break;
 	default://promotion
 		piece[move.end].type = moveSpecial(move.extra);
 	}
-	whiteTurn = !whiteTurn;
+	wTurn = !wTurn;
 }
 void ChessBoard::unMove(const Move& move) {
 	piece[move.start] = piece[move.end];
-	piece[move.end] = { moveReplace(move.extra), whiteTurn };
-	whiteTurn = !whiteTurn;
-	castlingRights += moveCastling(move.extra) << (whiteTurn ? 0 : 2);
+	piece[move.end] = { pType(move.extra >> 3), wTurn };
+	wTurn = !wTurn;
+	casRight += move.casChange;
 	switch (moveSpecial(move.extra)) {
 	case pType::none:
 		break;
 	case pType::pawn://en passant
-		if (whiteTurn)
+		if (wTurn)
 			piece[move.end - 8] = { pType::pawn, false };
 		else
 			piece[move.end + 8] = { pType::pawn, true };
 		break;
 	case pType::king://castling
 		if (move.end > move.start) {//short
-			piece[move.end + 1] = { pType::rook, whiteTurn };
+			piece[move.end + 1] = { pType::rook, wTurn };
 			piece[move.end - 1].type = pType::none;
 		}
 		else {//long
-			piece[move.end - 2] = { pType::rook, whiteTurn };
+			piece[move.end - 2] = { pType::rook, wTurn };
 			piece[move.end + 1].type = pType::none;
 		}
 		break;
@@ -151,8 +163,8 @@ int ChessBoard::evaluation() {
 			eval += piece[i].isWhite ? 900 : -900;
 			break;
 		default://king
-			if (isCheck(!whiteTurn, i))//illegal position
-				return whiteTurn ? maxInf : -maxInf;
+			if (isCheck(!wTurn, i))//illegal position
+				return wTurn ? maxInf : -maxInf;
 		}
 	}
 	if (insuff)
@@ -176,9 +188,9 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 	byte first = 0;//piece move
 	byte mat = 0;
 	for (byte i = 0; i < 64; i++) {
-		if (piece[i].isWhite != whiteTurn)
+		if (piece[i].isWhite != wTurn)
 			continue;
-		switch (piece[i].type) {//-set end, castling, special, size, insuff
+		switch (piece[i].type) {//-set end, castling, special, size, mat
 		case pType::none:
 			break;
 		case pType::pawn:
@@ -214,8 +226,9 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 			}
 			for (byte j = 0; j < 8; j++) {
 				if ((inBoard >> j) % 2) {
-					if (!hasAlly(i + knightMoves[j])) {
+					if (noAlly(i + knightMoves[j])) {
 						moves[size].extra = 0;
+						moves[size].casChange = 0;
 						moves[size++].end = i + knightMoves[j];
 					}
 				}
@@ -239,6 +252,7 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 				1, -1, 8, -8, 7, -7, 9, -9
 			};//overflow intented
 			byte inBoard = 0b11111111;//1 bit per move
+			byte casCache = casRight & (wTurn ? 0b0011 : 0b1100);
 			switch (posFile(i)) {
 			case 0:
 				inBoard &= 0b10110110;
@@ -253,26 +267,24 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 			case 7:
 				inBoard &= 0b11010101;
 			}
-			for (byte j = 0; j < 8; j++) {
-				if ((inBoard >> j) % 2) {
-					if (!hasAlly(i + kingMoves[j])) {
-						moves[size].extra = castlingRights >> (whiteTurn ? 0 : 2) << 6;
+			for (byte j = 0; j < 8; j++)
+				if ((inBoard >> j) % 2)
+					if (noAlly(i + kingMoves[j]))
 						moves[size++].end = i + kingMoves[j];
-					}
-				}
-			}
-			if (castlingRights & (whiteTurn ? 0b0001 : 0b0100)) {//short
-				//-check empty no check
-			}
-			if (castlingRights & (whiteTurn ? 0b0010 : 0b1000)) {//long
-				//-check empty no check
+			if (canShort())
+				moves[size++].end = i + 2;
+			if (canLong())
+				moves[size++].end = i - 2;
+			for (byte j = first; j < size; j++) {
+				moves[j].extra = byte(pType::king);
+				moves[j].casChange = casCache;
 			}
 		}
 		for (; first < size; first++)
 			moves[first].start = i;
 	}
 	if (!size) {//no possibles
-		if (isCheck(whiteTurn))
+		if (isCheck(wTurn))
 			return byte(endState::checkmate);
 		else
 			return byte(endState::stalemate);
@@ -307,7 +319,7 @@ byte ChessBoard::legalMoves(Move* moves, Move* previous) {
 	while (i < size) {
 		tested = moves[i];
 		doMove(tested);
-		if (isCheck(!whiteTurn)) {//remove illegal
+		if (isCheck(!wTurn)) {//remove illegal
 			size--;
 			moves[i] = moves[size];
 		}
@@ -316,7 +328,7 @@ byte ChessBoard::legalMoves(Move* moves, Move* previous) {
 		unMove(tested);
 	}
 	if (!size) {//all possibles are illegal
-		if (isCheck(whiteTurn))
+		if (isCheck(wTurn))
 			return byte(endState::checkmate);
 		else
 			return byte(endState::stalemate);
@@ -344,7 +356,7 @@ int ChessBoard::deepEvaluation(byte depth, Move* previous) {
 	}
 	byte lvl = 0;
 	hist[0].index = 0;
-	hist[0].bestEval = whiteTurn ? -maxInf : maxInf;
+	hist[0].bestEval = wTurn ? -maxInf : maxInf;
 	hist[0].minEval = -maxInf;
 	hist[0].maxEval = maxInf;
 	while (true) {//explore downwards loop
@@ -357,7 +369,7 @@ int ChessBoard::deepEvaluation(byte depth, Move* previous) {
 				eval = endEval(endState(hist[lvl].size));
 			else {//init node
 				hist[lvl].index = 0;
-				if (whiteTurn) {
+				if (wTurn) {
 					hist[lvl].bestEval = -maxInf;
 					hist[lvl].minEval = whiteConv(hist[lvl - 1].minEval);
 					hist[lvl].maxEval = whiteConv(min(hist[lvl - 1].maxEval, hist[lvl - 1].bestEval));
@@ -372,7 +384,7 @@ int ChessBoard::deepEvaluation(byte depth, Move* previous) {
 		}
 		while (true) {//calculate upwards loop
 			unMove(hist[--lvl].getMove());
-			if (whiteTurn) {
+			if (wTurn) {
 				hist[lvl].bestEval = max(hist[lvl].bestEval, eval);
 				if (++hist[lvl].index != hist[lvl].size && hist[lvl].bestEval < hist[lvl].maxEval)
 					break;//need more evals
