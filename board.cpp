@@ -56,16 +56,32 @@ int ChessBoard::endEval(endState end) {
 inline bool ChessBoard::noAlly(byte pos) {
 	return piece[pos].type == pType::none || piece[pos].isWhite != wTurn;
 }
-bool ChessBoard::canShort() {
+bool ChessBoard::canShort(byte kingPos) {
 	if (!(casRight & (wTurn ? 0b0001 : 0b0100)))
 		return false;
-	//-more checks;
+	if (piece[kingPos + 1].type != pType::none)
+		return false;
+	if (piece[kingPos + 2].type != pType::none)
+		return false;
+	if (isCheck(wTurn, kingPos))
+		return false;
+	if (isCheck(wTurn, kingPos + 1))
+		return false;
 	return true;
 }
-bool ChessBoard::canLong() {
+bool ChessBoard::canLong(byte kingPos) {
 	if (!(casRight & (wTurn ? 0b0010 : 0b1000)))
 		return false;
-	//-more checks;
+	if (piece[kingPos - 1].type != pType::none)
+		return false;
+	if (piece[kingPos - 2].type != pType::none)
+		return false;
+	if (piece[kingPos - 3].type != pType::none)
+		return false;
+	if (isCheck(wTurn, kingPos))
+		return false;
+	if (isCheck(wTurn, kingPos - 1))
+		return false;
 	return true;
 }
 void ChessBoard::doMove(const Move& move) {
@@ -224,15 +240,13 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 			case 6:
 				inBoard &= 0b00111111;
 			}
-			for (byte j = 0; j < 8; j++) {
-				if ((inBoard >> j) % 2) {
+			for (byte j = 0; j < 8; j++)
+				if ((inBoard >> j) % 2)
 					if (noAlly(i + knightMoves[j])) {
 						moves[size].extra = 0;
 						moves[size].casChange = 0;
 						moves[size++].end = i + knightMoves[j];
 					}
-				}
-			}
 			mat++;
 			break;
 		case pType::bishop:
@@ -240,7 +254,40 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 			mat++;
 			break;
 		case pType::rook:
-			//-
+			byte casCache = 0;
+			if (wTurn) {
+				switch (i) {
+				case 0:
+					casCache = casRight & 0b0010;
+					break;
+				case 7:
+					casCache = casRight & 0b0001;
+				}
+			}
+			else {
+				switch (i) {
+				case 56:
+					casCache = casRight & 0b1000;
+					break;
+				case 63:
+					casCache = casRight & 0b0100;
+				}
+			}
+			//-missing block handling
+			/*
+			for (byte j = i + 8; posRank(j) < 8 && noAlly(j); j += 8)//up
+					moves[size++].end = j;
+			for (byte j = i - 8; posRank(j) < 8 && noAlly(j); j -= 8)//down
+				moves[size++].end = j;
+			for (byte j = i + 1; posFile(j) > 0 && noAlly(j); j += 1)//right
+				moves[size++].end = j;
+			for (byte j = i - 1; posFile(j) < 7 && noAlly(j); j -= 1)//left
+				moves[size++].end = j;
+			*/
+			for (byte j = first; j < size; j++) {
+				moves[j].extra = 0;
+				moves[j].casChange = casCache;
+			}
 			mat = 2;
 			break;
 		case pType::queen:
@@ -269,16 +316,20 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 			}
 			for (byte j = 0; j < 8; j++)
 				if ((inBoard >> j) % 2)
-					if (noAlly(i + kingMoves[j]))
+					if (noAlly(i + kingMoves[j])) {
+						moves[size].extra = 0;
 						moves[size++].end = i + kingMoves[j];
-			if (canShort())
+					}
+			if (canShort(i)) {
+				moves[size].extra = byte(pType::king);
 				moves[size++].end = i + 2;
-			if (canLong())
-				moves[size++].end = i - 2;
-			for (byte j = first; j < size; j++) {
-				moves[j].extra = byte(pType::king);
-				moves[j].casChange = casCache;
 			}
+			if (canLong(i)) {
+				moves[size].extra = byte(pType::king);
+				moves[size++].end = i - 2;
+			}
+			for (byte j = first; j < size; j++)
+				moves[j].casChange = casCache;
 		}
 		for (; first < size; first++)
 			moves[first].start = i;

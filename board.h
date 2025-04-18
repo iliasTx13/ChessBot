@@ -26,8 +26,8 @@ class ChessBoard {
 	int evaluation();
 	int endEval(endState end);
 	inline bool noAlly(byte pos);
-	bool canShort();
-	bool canLong();
+	bool canShort(byte kingPos);
+	bool canLong(byte kingPos);
 public:
 	bool wTurn;
 	byte casRight;
