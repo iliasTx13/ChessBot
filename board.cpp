@@ -53,8 +53,14 @@ int ChessBoard::endEval(endState end) {
 		return wTurn ? -maxInf : maxInf;
 	}
 }
-inline bool ChessBoard::noAlly(byte pos) {
-	return piece[pos].type == pType::none || piece[pos].isWhite != wTurn;
+bool ChessBoard::checkNsave(Move* moves, byte& size, byte pos) {
+	if (piece[pos].type != pType::none) {
+		if (piece[pos].isWhite != wTurn)
+			moves[size++].end = pos;
+		return true;
+	}
+	moves[size++].end = pos;
+	return false;
 }
 bool ChessBoard::canShort(byte kingPos) {
 	if (!(casRight & (wTurn ? 0b0001 : 0b0100)))
@@ -203,6 +209,7 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 	byte size = 0;
 	byte first = 0;//piece move
 	byte mat = 0;
+	byte inBoard, tempB;
 	for (byte i = 0; i < 64; i++) {
 		if (piece[i].isWhite != wTurn)
 			continue;
@@ -217,7 +224,7 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 			static const byte knightMoves[8] = {
 				-17, -15, -10, -6, 6, 10, 15, 17
 			};//overflow intented
-			byte inBoard = 0b11111111;//1 bit per move
+			inBoard = 0b11111111;//1 bit per move
 			switch (posFile(i)) {
 			case 0:
 				inBoard &= 0b10111110;
@@ -241,52 +248,83 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 				inBoard &= 0b00111111;
 			}
 			for (byte j = 0; j < 8; j++)
-				if ((inBoard >> j) % 2)
-					if (noAlly(i + knightMoves[j])) {
+				if ((inBoard >> j) % 2) {
+					tempB = i + knightMoves[j];
+					if (piece[tempB].type == pType::none || piece[tempB].isWhite != wTurn) {
 						moves[size].extra = 0;
 						moves[size].casChange = 0;
-						moves[size++].end = i + knightMoves[j];
+						moves[size++].end = tempB;
 					}
+				}
 			mat++;
 			break;
 		case pType::bishop:
-			//-
+			if (posRank(i) > posFile(i)) {//UL
+				for (byte j = i; posRank(j) != 7;)//UR -> U
+					if (checkNsave(moves, size, j += 9)) break;
+				for (byte j = i; posFile(j) != 0;)//DL -> L
+					if (checkNsave(moves, size, j -= 9)) break;
+			}
+			else {//DR
+				for (byte j = i; posFile(j) != 7;)//UR -> R
+					if (checkNsave(moves, size, j += 9)) break;
+				for (byte j = i; posRank(j) != 0;)//DL -> D
+					if (checkNsave(moves, size, j -= 9)) break;
+			}
+			if (posRank(i) + posFile(i) < 8) {//DL
+				for (byte j = i; posFile(j) != 0;)//UL -> L
+					if (checkNsave(moves, size, j += 7)) break;
+				for (byte j = i; posRank(j) != 0;)//DR -> D
+					if (checkNsave(moves, size, j -= 7)) break;
+			}
+			else {//UR
+				for (byte j = i; posRank(j) != 7;)//UL -> U
+					if (checkNsave(moves, size, j += 7)) break;
+				for (byte j = i; posFile(j) != 7;)//DR -> R
+					if (checkNsave(moves, size, j -= 7)) break;
+			}
+			for (byte j = first; j < size; j++) {
+				moves[j].extra = 0;
+				moves[j].casChange = 0;
+			}
 			mat++;
 			break;
 		case pType::rook:
-			byte casCache = 0;
+			for (byte j = i; posRank(j) != 7;)//U
+				if (checkNsave(moves, size, j += 8)) break;
+			for (byte j = i; posRank(j) != 0;)//D
+				if (checkNsave(moves, size, j -= 8)) break;
+			for (byte j = i; posFile(j) != 7;)//R
+				if (checkNsave(moves, size, j += 1)) break;
+			for (byte j = i; posFile(j) != 0;)//L
+				if (checkNsave(moves, size, j -= 1)) break;
 			if (wTurn) {
 				switch (i) {
 				case 0:
-					casCache = casRight & 0b0010;
+					tempB = casRight & 0b0010;
 					break;
 				case 7:
-					casCache = casRight & 0b0001;
+					tempB = casRight & 0b0001;
+					break;
+				default:
+					tempB = 0;
 				}
 			}
 			else {
 				switch (i) {
 				case 56:
-					casCache = casRight & 0b1000;
+					tempB = casRight & 0b1000;
 					break;
 				case 63:
-					casCache = casRight & 0b0100;
+					tempB = casRight & 0b0100;
+					break;
+				default:
+					tempB = 0;
 				}
 			}
-			//-missing block handling
-			/*
-			for (byte j = i + 8; posRank(j) < 8 && noAlly(j); j += 8)//up
-					moves[size++].end = j;
-			for (byte j = i - 8; posRank(j) < 8 && noAlly(j); j -= 8)//down
-				moves[size++].end = j;
-			for (byte j = i + 1; posFile(j) > 0 && noAlly(j); j += 1)//right
-				moves[size++].end = j;
-			for (byte j = i - 1; posFile(j) < 7 && noAlly(j); j -= 1)//left
-				moves[size++].end = j;
-			*/
 			for (byte j = first; j < size; j++) {
 				moves[j].extra = 0;
-				moves[j].casChange = casCache;
+				moves[j].casChange = tempB;
 			}
 			mat = 2;
 			break;
@@ -298,8 +336,7 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 			static const byte kingMoves[8] = {
 				1, -1, 8, -8, 7, -7, 9, -9
 			};//overflow intented
-			byte inBoard = 0b11111111;//1 bit per move
-			byte casCache = casRight & (wTurn ? 0b0011 : 0b1100);
+			inBoard = 0b11111111;//1 bit per move
 			switch (posFile(i)) {
 			case 0:
 				inBoard &= 0b10110110;
@@ -315,11 +352,13 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 				inBoard &= 0b11010101;
 			}
 			for (byte j = 0; j < 8; j++)
-				if ((inBoard >> j) % 2)
-					if (noAlly(i + kingMoves[j])) {
+				if ((inBoard >> j) % 2) {
+					tempB = i + kingMoves[j];
+					if (piece[tempB].type == pType::none || piece[tempB].isWhite != wTurn) {
 						moves[size].extra = 0;
-						moves[size++].end = i + kingMoves[j];
+						moves[size++].end = tempB;
 					}
+				}
 			if (canShort(i)) {
 				moves[size].extra = byte(pType::king);
 				moves[size++].end = i + 2;
@@ -328,8 +367,9 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 				moves[size].extra = byte(pType::king);
 				moves[size++].end = i - 2;
 			}
+			tempB = casRight & (wTurn ? 0b0011 : 0b1100);
 			for (byte j = first; j < size; j++)
-				moves[j].casChange = casCache;
+				moves[j].casChange = tempB;
 		}
 		for (; first < size; first++)
 			moves[first].start = i;
@@ -341,7 +381,7 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 			return byte(endState::stalemate);
 	}
 	pType capture;
-	Move temp;
+	Move tempM;
 	first = 0;//non capture
 	for (byte i = 0; i < size; i++) {//hande captures
 		capture = piece[moves[i].end].type;
@@ -352,9 +392,9 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 		case pType::king:
 			return byte(endState::illegal);
 		default://swap capture with first non capture
-			temp = moves[i];
+			tempM = moves[i];
 			moves[i] = moves[first];
-			moves[first++] = temp;
+			moves[first++] = tempM;
 		}
 	}
 	if (mat > 1)

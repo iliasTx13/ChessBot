@@ -25,7 +25,7 @@ class ChessBoard {
 	byte possibleMoves(Move* moves, Move* previous = nullptr);
 	int evaluation();
 	int endEval(endState end);
-	inline bool noAlly(byte pos);
+	bool checkNsave(Move* moves, byte& size, byte pos);
 	bool canShort(byte kingPos);
 	bool canLong(byte kingPos);
 public:
