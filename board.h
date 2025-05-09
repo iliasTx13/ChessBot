@@ -22,7 +22,7 @@ struct Move {
 };
 class ChessBoard {
 	bool isCheck(bool forWhite, byte kingPos = 64);
-	byte possibleMoves(Move* moves, Move* previous = nullptr);
+	byte possibleMoves(Move* moves, Move* prev = nullptr);
 	int evaluation();
 	int endEval(endState end);
 	bool checkNsave(Move* moves, byte& size, byte pos);
@@ -37,8 +37,8 @@ public:
 	ChessBoard& operator=(const ChessBoard& other);
 	void doMove(const Move& move);
 	void unMove(const Move& move);
-	byte legalMoves(Move* moves, Move* previous = nullptr);
-	int deepEvaluation(byte depth, Move* previous = nullptr);
+	byte legalMoves(Move* moves, Move* prev = nullptr);
+	int deepEvaluation(byte depth, Move* prev = nullptr);
 };
 inline byte posFile(byte pos) {
 	return pos % 8;

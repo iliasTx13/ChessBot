@@ -65,30 +65,23 @@ bool ChessBoard::checkNsave(Move* moves, byte& size, byte pos) {
 bool ChessBoard::canShort(byte kingPos) {
 	if (!(casRight & (wTurn ? 0b0001 : 0b0100)))
 		return false;
-	if (piece[kingPos + 1].type != pType::none)
-		return false;
-	if (piece[kingPos + 2].type != pType::none)
+	if (piece[kingPos + 1].type != pType::none ||
+		piece[kingPos + 2].type != pType::none)
 		return false;
 	if (isCheck(wTurn, kingPos))
 		return false;
-	if (isCheck(wTurn, kingPos + 1))
-		return false;
-	return true;
+	return !isCheck(wTurn, kingPos + 1);
 }
 bool ChessBoard::canLong(byte kingPos) {
 	if (!(casRight & (wTurn ? 0b0010 : 0b1000)))
 		return false;
-	if (piece[kingPos - 1].type != pType::none)
-		return false;
-	if (piece[kingPos - 2].type != pType::none)
-		return false;
-	if (piece[kingPos - 3].type != pType::none)
+	if (piece[kingPos - 1].type != pType::none ||
+		piece[kingPos - 2].type != pType::none ||
+		piece[kingPos - 3].type != pType::none)
 		return false;
 	if (isCheck(wTurn, kingPos))
 		return false;
-	if (isCheck(wTurn, kingPos - 1))
-		return false;
-	return true;
+	return !isCheck(wTurn, kingPos - 1);
 }
 void ChessBoard::doMove(const Move& move) {
 	piece[move.end] = piece[move.start];
@@ -205,27 +198,72 @@ bool ChessBoard::isCheck(bool forWhite, byte kingPos) {
 	//-pawn
 	return false;
 }
-byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
+byte ChessBoard::possibleMoves(Move* moves, Move* prev) {
+	typedef int_fast8_t dPos;
 	byte size = 0;
 	byte first = 0;//piece move
 	byte mat = 0;
-	byte inBoard, tempB;
+	byte inBoard, tempB, currRank, currFile;
 	for (byte i = 0; i < 64; i++) {
 		if (piece[i].isWhite != wTurn)
 			continue;
+		currRank = posRank(i);
+		currFile = posFile(i);
 		switch (piece[i].type) {//-set end, castling, special, size, mat
 		case pType::none:
 			break;
 		case pType::pawn:
-			//-
+			dPos forw = wTurn ? 8 : -8;
+			if (piece[i + forw].type == pType::none) {
+				moves[size++].end = i + forw;
+				if (currRank == (wTurn ? 1 : 6))//could move 2 squares
+					if (piece[i + 2 * forw].type == pType::none)
+						moves[size++].end = i + 2 * forw;
+			}
+			if (currFile != 0) {
+				tempB = i + forw - 1;
+				if (piece[tempB].isWhite != wTurn && piece[tempB].type != pType::none)
+					moves[size++].end = tempB;
+			}
+			if (currFile != 7) {
+				tempB = i + forw + 1;
+				if (piece[tempB].isWhite != wTurn && piece[tempB].type != pType::none)
+					moves[size++].end = tempB;
+			}
+			if (currRank == (wTurn ? 6 : 1)) {//promote
+				tempB = size;
+				for (byte j = first; j < tempB; j++) {
+					moves[size].end = moves[j].end;//dublicate x3
+					moves[size + 1].end = moves[j].end;
+					moves[size + 2].end = moves[j].end;
+					moves[j].extra = byte(pType::queen);//apply 4 promotions
+					moves[size].extra = byte(pType::rook);
+					moves[size + 1].extra = byte(pType::bishop);
+					moves[size + 2].extra = byte(pType::knight);
+					size += 3;
+				}
+			}
+			else {
+				for (byte j = first; j < size; j++)
+					moves[j].extra = 0;
+				if (prev != nullptr)
+					if (piece[prev->end].type == pType::pawn &&
+						(prev->end == i + 1 || prev->end == i - 1) &&
+						prev->start == prev->end + 2 * forw) {//en passant
+						moves[size].extra = byte(pType::pawn);
+						moves[size++].end = prev->end + forw;
+					}
+			}
+			for (byte j = first; j < size; j++)
+				moves[j].casChange = 0;
 			mat = 2;
 			break;
 		case pType::knight:
-			static const byte knightMoves[8] = {
+			static const dPos knightMoves[8] = {
 				-17, -15, -10, -6, 6, 10, 15, 17
-			};//overflow intented
+			};
 			inBoard = 0b11111111;//1 bit per move
-			switch (posFile(i)) {
+			switch (currFile) {
 			case 0:
 				inBoard &= 0b10111110;
 			case 1:
@@ -236,7 +274,7 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 			case 6:
 				inBoard &= 0b11010111;
 			}
-			switch (posRank(i)) {
+			switch (currRank) {
 			case 0:
 				inBoard &= 0b11110011;
 			case 1:
@@ -258,8 +296,19 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 				}
 			mat++;
 			break;
+		case pType::queen:
+			for (byte j = i; posRank(j) != 7;)//U
+				if (checkNsave(moves, size, j += 8)) break;
+			for (byte j = i; posRank(j) != 0;)//D
+				if (checkNsave(moves, size, j -= 8)) break;
+			for (byte j = i; posFile(j) != 7;)//R
+				if (checkNsave(moves, size, j += 1)) break;
+			for (byte j = i; posFile(j) != 0;)//L
+				if (checkNsave(moves, size, j -= 1)) break;
+			mat = 2;
+			//no break
 		case pType::bishop:
-			if (posRank(i) > posFile(i)) {//UL
+			if (currRank > currFile) {//UL
 				for (byte j = i; posRank(j) != 7;)//UR -> U
 					if (checkNsave(moves, size, j += 9)) break;
 				for (byte j = i; posFile(j) != 0;)//DL -> L
@@ -271,7 +320,7 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 				for (byte j = i; posRank(j) != 0;)//DL -> D
 					if (checkNsave(moves, size, j -= 9)) break;
 			}
-			if (posRank(i) + posFile(i) < 8) {//DL
+			if (currRank + currFile < 8) {//DL
 				for (byte j = i; posFile(j) != 0;)//UL -> L
 					if (checkNsave(moves, size, j += 7)) break;
 				for (byte j = i; posRank(j) != 0;)//DR -> D
@@ -328,23 +377,19 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 			}
 			mat = 2;
 			break;
-		case pType::queen:
-			//-
-			mat = 2;
-			break;
 		case pType::king:
-			static const byte kingMoves[8] = {
+			static const dPos kingMoves[8] = {
 				1, -1, 8, -8, 7, -7, 9, -9
-			};//overflow intented
+			};
 			inBoard = 0b11111111;//1 bit per move
-			switch (posFile(i)) {
+			switch (currFile) {
 			case 0:
 				inBoard &= 0b10110110;
 				break;
 			case 7:
 				inBoard &= 0b01111001;
 			}
-			switch (posRank(i)) {
+			switch (currRank) {
 			case 0:
 				inBoard &= 0b11101010;
 				break;
@@ -401,8 +446,8 @@ byte ChessBoard::possibleMoves(Move* moves, Move* previous) {
 		return byte(endState::insuff_mat);
 	return size;
 }
-byte ChessBoard::legalMoves(Move* moves, Move* previous) {
-	byte size = possibleMoves(moves, previous);
+byte ChessBoard::legalMoves(Move* moves, Move* prev) {
+	byte size = possibleMoves(moves, prev);
 	if (size > maxMoves)//endState
 		return size;
 	byte i = 0;
@@ -426,7 +471,7 @@ byte ChessBoard::legalMoves(Move* moves, Move* previous) {
 	}
 	return size;
 }
-int ChessBoard::deepEvaluation(byte depth, Move* previous) {
+int ChessBoard::deepEvaluation(byte depth, Move* prev) {
 	if (!depth)
 		return evaluation();
 	struct Node {
@@ -438,7 +483,7 @@ int ChessBoard::deepEvaluation(byte depth, Move* previous) {
 		}
 	};
 	Node* hist = new Node[depth];
-	hist[0].size = possibleMoves(hist[0].moves, previous);
+	hist[0].size = possibleMoves(hist[0].moves, prev);
 	int eval;
 	if (hist[0].size > maxMoves) {
 		eval = endEval(endState(hist[0].size));
