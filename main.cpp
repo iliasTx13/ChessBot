@@ -2,7 +2,7 @@
 #include <iomanip>
 #include "board.h"
 #define maxStr 6
-using namespace std;
+using std::cout, std::cin;
 bool strToByte(const char* inp, byte& outp, byte max = 255);
 bool strToMove(const char* inp, Move& outp);
 void moveToStr(const Move& inp, char* outp);
@@ -14,15 +14,15 @@ int main() {
 	Move* legals = new Move[maxMoves];
 	byte size, depth;
 	bool botIsWhite;
-	cout << showpos << fixed << setprecision(3);//for eval
-	cout << "ChessBot v1.0 by iliasTx13" << endl;
+	cout << std::showpos << std::fixed << std::setprecision(3);//for eval
+	cout << "ChessBot v1.0 by iliasTx13\n";
 	while (true) {
 		while (true) {
 			cout << "Set depth at: ";
 			if (userInp(str))
 				if (strToByte(str, depth))
 					break;
-			cout << "Declined: not an integer from 0 to 255" << endl;
+			cout << "Declined: not an integer from 0 to 255\n";
 		}
 		while (true) {
 			cout << "Bot plays as: ";
@@ -36,7 +36,7 @@ int main() {
 					break;
 				}
 			}
-			cout << "Declined: not white or black" << endl;
+			cout << "Declined: not white or black\n";
 		}
 		*board = ChessBoard();//starting position
 		size = board->legalMoves(legals);
@@ -54,7 +54,7 @@ int main() {
 					}
 				}
 				moveToStr(currentM, str);
-				cout << "Bot plays: " << str << endl;
+				cout << "Bot plays: " << str << '\n';
 				cout << "Evaluation: ";
 				if (bestEval > minInf)
 					cout << "+M" << maxInf - bestEval;
@@ -62,20 +62,20 @@ int main() {
 					cout << "-M" << maxInf + bestEval;
 				else
 					cout << float(bestEval) / 100;
-				cout << endl;
+				cout << '\n';
 			}
 			else {//opp's turn
 				cout << "Opponent plays: ";
 				if (!userInp(str)) {
-					cout << "Declined: Move not recognised" << endl;
+					cout << "Declined: Move not recognised\n";
 					continue;
 				}
 				if (!strcmp(str, "end")) {
-					cout << "Game terminated" << endl;
+					cout << "Game terminated\n";
 					break;
 				}
 				if (!strToMove(str, currentM)) {
-					cout << "Declined: Move not recognised" << endl;
+					cout << "Declined: Move not recognised\n";
 					continue;
 				}
 				byte i = 0;
@@ -83,22 +83,22 @@ int main() {
 					if (currentM.start == legals[i].start && currentM.end == legals[i].end)
 						break;
 				if (i == size) {
-					cout << "Declined: Move is illegal" << endl;
+					cout << "Declined: Move is illegal\n";
 					continue;
 				}
 				switch (moveSpecial(legals[i].extra)) {//check if promotion status matches
-				case pType::none:
-				case pType::pawn:
-				case pType::king:
-					if (moveSpecial(currentM.extra) != pType::none) {
-						cout << "Declined: Move is illegal" << endl;
+				case pT::none:
+				case pT::pawn:
+				case pT::king:
+					if (moveSpecial(currentM.extra) != pT::none) {
+						cout << "Declined: Move is illegal\n";
 						continue;
 					}
 					currentM.extra = legals[i].extra;//both are non promotions
 					break;
 				default:
-					if (moveSpecial(currentM.extra) == pType::none) {
-						cout << "Declined: Move is illegal" << endl;
+					if (moveSpecial(currentM.extra) == pT::none) {
+						cout << "Declined: Move is illegal\n";
 						continue;
 					}
 					currentM.extra += legals[i].extra & 0b11111000;//both are promotions
@@ -109,16 +109,16 @@ int main() {
 			if (size > maxMoves) {//game ended
 				switch (endState(size)) {
 				case endState::checkmate:
-					cout << (board->wTurn == botIsWhite ? "Opp" : "Bot") << " wins by checkmate" << endl;
+					cout << (board->wTurn == botIsWhite ? "Opp" : "Bot") << " wins by checkmate\n";
 					break;
 				case endState::stalemate:
-					cout << "Draw by stalemate" << endl;
+					cout << "Draw by stalemate\n";
 					break;
 				case endState::insuff_mat:
-					cout << "Draw by insufficient material" << endl;
+					cout << "Draw by insufficient material\n";
 					break;
 				default://illegal, should never occur, exists only for debugging
-					cout << "Error illegal position" << endl;
+					cout << "Error illegal position\n";
 				}
 				break;
 			}
@@ -134,7 +134,7 @@ int main() {
 					return 0;
 				}
 			}
-			cout << "Declined: not yes or no" << endl;
+			cout << "Declined: not yes or no\n";
 		}
 	}
 }
@@ -147,19 +147,19 @@ bool strToMove(const char* inp, Move& outp) {
 	outp.end = inp[2] - 'a' + (inp[3] - '1') * 8;
 	switch (inp[4]) {
 	case '\0':
-		outp.extra = byte(pType::none);
+		outp.extra = byte(pT::none);
 		return true;
 	case 'n':
-		outp.extra = byte(pType::knight);
+		outp.extra = byte(pT::knight);
 		break;
 	case 'b':
-		outp.extra = byte(pType::bishop);
+		outp.extra = byte(pT::bishop);
 		break;
 	case 'r':
-		outp.extra = byte(pType::rook);
+		outp.extra = byte(pT::rook);
 		break;
 	case 'q':
-		outp.extra = byte(pType::queen);
+		outp.extra = byte(pT::queen);
 		break;
 	default:
 		return false;
@@ -172,16 +172,16 @@ void moveToStr(const Move& inp, char* outp) {
 	outp[2] = posFile(inp.end) + 'a';
 	outp[3] = posRank(inp.end) + '1';
 	switch (moveSpecial(inp.extra)) {
-	case pType::knight:
+	case pT::knight:
 		outp[4] = 'n';
 		break;
-	case pType::bishop:
+	case pT::bishop:
 		outp[4] = 'b';
 		break;
-	case pType::rook:
+	case pT::rook:
 		outp[4] = 'r';
 		break;
-	case pType::queen:
+	case pT::queen:
 		outp[4] = 'q';
 		break;
 	default:
@@ -195,7 +195,7 @@ bool userInp(char* inp) {
 		return true;
 	if (!(cin.eof() || cin.bad())) {
 		cin.clear();
-		if (cin.ignore(numeric_limits<streamsize>::max(), '\n'))
+		if (cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'))
 			return false;
 	}
 	exit(1);

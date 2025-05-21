@@ -4,15 +4,16 @@
 #define maxInf 32000//eval for checkmate
 #define minInf 31000//max eval without checkmate in X (may not be enough for custom material)
 typedef uint_fast8_t byte;
-enum struct pType : byte {
+typedef int_fast8_t dPos;
+enum struct pT : byte {
 	none, pawn, knight, bishop, rook, queen, king
 };
 enum struct endState : byte {
 	checkmate = maxMoves + 1, stalemate, insuff_mat, illegal
 };
 struct Piece {
-	pType type;
-	bool isWhite;
+	pT type;
+	bool isW;
 };
 struct Move {
 	byte start;
@@ -21,17 +22,21 @@ struct Move {
 	byte casChange;
 };
 class ChessBoard {
-	bool isCheck(bool forWhite, byte kingPos = 64);
-	byte possibleMoves(Move* moves, Move* prev = nullptr);
-	int evaluation();
-	int endEval(endState end);
-	bool checkNsave(Move* moves, byte& size, byte pos);
-	bool canShort(byte kingPos);
-	bool canLong(byte kingPos);
+	static const dPos nAtk[8];
+	static const dPos kAtk[8];
 public:
 	bool wTurn;
 	byte casRight;
 	Piece piece[64];
+private:
+	bool isCheck(bool forW, byte kPos = 64);
+	byte possibleMoves(Move* moves, Move* prev = nullptr);
+	int evaluation();
+	int endEval(endState end);
+	bool checkNsave(Move* moves, byte& size, byte pos);
+	bool canShort(byte kPos);
+	bool canLong(byte kPos);
+public:
 	ChessBoard();
 	ChessBoard(const ChessBoard& other);
 	ChessBoard& operator=(const ChessBoard& other);
@@ -40,14 +45,16 @@ public:
 	byte legalMoves(Move* moves, Move* prev = nullptr);
 	int deepEvaluation(byte depth, Move* prev = nullptr);
 };
+const dPos ChessBoard::nAtk[8] = { -17, -15, -10, -6, 6, 10, 15, 17 };
+const dPos ChessBoard::kAtk[8] = { 1, -1, 8, -8, 7, -7, 9, -9 };
 inline byte posFile(byte pos) {
 	return pos % 8;
 }
 inline byte posRank(byte pos) {
 	return pos >> 3;
 }
-inline pType moveSpecial(byte extra) {
-	return pType(extra % 8);
+inline pT moveSpecial(byte extra) {
+	return pT(extra % 8);
 }
 inline int max(int a, int b) {
 	return a > b ? a : b;
