@@ -192,9 +192,11 @@ bool ChessBoard::isCheck(bool forW, byte kPos) {
 		while (piece[kPos].type != pT::king || piece[kPos].isW != forW)
 			kPos++;
 	}
+	byte currRank = posRank(kPos);
+	byte currFile = posFile(kPos);
 	byte inBoardN = 0b11111111;
 	byte inBoardK = 0b11111111;
-	switch (posFile(kPos)) {
+	switch (currFile) {
 	case 0:
 		inBoardK &= 0b01101101;
 		inBoardN &= 0b10111110;
@@ -207,7 +209,7 @@ bool ChessBoard::isCheck(bool forW, byte kPos) {
 	case 6:
 		inBoardN &= 0b11010111;
 	}
-	switch (posRank(kPos)) {
+	switch (currRank) {
 	case 0:
 		inBoardK &= 0b01010111;
 		inBoardN &= 0b11110011;
@@ -244,7 +246,45 @@ bool ChessBoard::isCheck(bool forW, byte kPos) {
 			if (piece[kPos - 9].type == pT::pawn && piece[kPos - 9].isW != forW)
 				return true;
 	}
-	//-Q,R,B
+	byte kSees[4];
+	for (kSees[0] = kPos; posRank(kSees[0]) != 7;)//U
+		if (piece[kSees[0] += 8].type != pT::none) break;
+	for (kSees[1] = kPos; posRank(kSees[1]) != 0;)//D
+		if (piece[kSees[1] -= 8].type != pT::none) break;
+	for (kSees[2] = kPos; posFile(kSees[2]) != 7;)//R
+		if (piece[kSees[2] += 1].type != pT::none) break;
+	for (kSees[3] = kPos; posFile(kSees[3]) != 0;)//L
+		if (piece[kSees[3] -= 1].type != pT::none) break;
+	for (byte j = 0; j < 4; j++)
+		if ((piece[kSees[j]].type == pT::rook || piece[kSees[j]].type == pT::queen) && piece[kSees[j]].isW != forW)
+			return true;
+	if (currRank > currFile) {//UL
+		for (kSees[0] = kPos; posRank(kSees[0]) != 7;)//UR -> U
+			if (piece[kSees[0] += 9].type != pT::none) break;
+		for (kSees[1] = kPos; posFile(kSees[1]) != 0;)//DL -> L
+			if (piece[kSees[1] -= 9].type != pT::none) break;
+	}
+	else {//DR
+		for (kSees[0] = kPos; posFile(kSees[0]) != 7;)//UR -> R
+			if (piece[kSees[0] += 9].type != pT::none) break;
+		for (kSees[1] = kPos; posRank(kSees[1]) != 0;)//DL -> D
+			if (piece[kSees[1] -= 9].type != pT::none) break;
+	}
+	if (currRank + currFile < 8) {//DL
+		for (kSees[2] = kPos; posFile(kSees[2]) != 0;)//UL -> L
+			if (piece[kSees[2] += 7].type != pT::none) break;
+		for (kSees[3] = kPos; posRank(kSees[3]) != 0;)//DR -> D
+			if (piece[kSees[3] -= 7].type != pT::none) break;
+	}
+	else {//UR
+		for (kSees[2] = kPos; posRank(kSees[2]) != 7;)//UL -> U
+			if (piece[kSees[2] += 7].type != pT::none) break;
+		for (kSees[3] = kPos; posFile(kSees[3]) != 7;)//DR -> R
+			if (piece[kSees[3] -= 7].type != pT::none) break;
+	}
+	for (byte j = 0; j < 4; j++)
+		if ((piece[kSees[j]].type == pT::bishop || piece[kSees[j]].type == pT::queen) && piece[kSees[j]].isW != forW)
+			return true;
 	return false;
 }
 byte ChessBoard::possibleMoves(Move* moves, Move* prev) {
