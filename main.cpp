@@ -2,7 +2,7 @@
 #include <iomanip>
 #include "board.h"
 #define maxStr 6
-using std::cout, std::cin;
+using std::cout;
 bool strToByte(const char* inp, byte& outp, byte max = 255);
 bool strToMove(const char* inp, Move& outp);
 void moveToStr(const Move& inp, char* outp);
@@ -39,6 +39,7 @@ int main() {
 			cout << "Declined: not white or black\n";
 		}
 		*board = ChessBoard();//starting position
+		cout << '\n' << *board << '\n';
 		size = board->legalMoves(legals);
 		while (true) {//main game loop
 			if (board->wTurn == botIsWhite) {//bot's turn
@@ -46,7 +47,7 @@ int main() {
 				int eval;
 				for (byte i = 0; i < size; i++) {
 					board->doMove(legals[i]);
-					eval = board->deepEvaluation(depth, &legals[i]);
+					eval = board->deepEvaluation(depth, bestEval, &legals[i]);
 					board->unMove(legals[i]);
 					if (eval > bestEval == board->wTurn) {
 						bestEval = eval;
@@ -101,10 +102,12 @@ int main() {
 						cout << "Declined: Move is illegal\n";
 						continue;
 					}
-					currentM.extra += legals[i].extra & 0b11111000;//both are promotions
+					currentM.extra += legals[i].extra & 0b111000;//both are promotions
 				}
+				currentM.casChange = legals[i].casChange;
 			}
 			board->doMove(currentM);
+			cout << '\n' << *board << '\n';
 			size = board->legalMoves(legals, &currentM);
 			if (size > maxMoves) {//game ended
 				switch (endState(size)) {
@@ -191,11 +194,11 @@ void moveToStr(const Move& inp, char* outp) {
 	outp[5] = '\0';
 }
 bool userInp(char* inp) {
-	if (cin.getline(inp, maxStr, '\n'))
+	if (std::cin.getline(inp, maxStr, '\n'))
 		return true;
-	if (!(cin.eof() || cin.bad())) {
-		cin.clear();
-		if (cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'))
+	if (!(std::cin.eof() || std::cin.bad())) {
+		std::cin.clear();
+		if (std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'))
 			return false;
 	}
 	exit(1);

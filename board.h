@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <iostream>
 #define maxMoves 250//upper limit for possible moves
 #define maxInf 32000//eval for checkmate
 #define minInf 31000//max eval without checkmate in X (may not be enough for custom material)
@@ -22,15 +23,15 @@ struct Move {
 	byte casChange;
 };
 class ChessBoard {
+public://could be private
 	static const dPos nAtk[8];
 	static const dPos kAtk[8];
-public:
 	bool wTurn;
 	byte casRight;
 	Piece piece[64];
-private:
+public://could be private
 	bool isCheck(bool forW, byte kPos = 64);
-	byte possibleMoves(Move* moves, Move* prev = nullptr);
+	byte possibleMoves(Move* moves, Move* prev);
 	int evaluation();
 	int endEval(endState end);
 	bool checkNsave(Move* moves, byte& size, byte pos);
@@ -43,10 +44,9 @@ public:
 	void doMove(const Move& move);
 	void unMove(const Move& move);
 	byte legalMoves(Move* moves, Move* prev = nullptr);
-	int deepEvaluation(byte depth, Move* prev = nullptr);
+	int deepEvaluation(byte depth, int prevEval, Move* prev);
+	friend std::ostream& operator<<(std::ostream& stream, const ChessBoard& data);
 };
-const dPos ChessBoard::nAtk[8] = { -17, -15, -10, -6, 6, 10, 15, 17 };
-const dPos ChessBoard::kAtk[8] = { 1, -1, 8, -8, 7, -7, 9, -9 };
 inline byte posFile(byte pos) {
 	return pos % 8;
 }

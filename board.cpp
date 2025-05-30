@@ -1,4 +1,6 @@
 #include "board.h"
+const dPos ChessBoard::nAtk[8] = { -17, -15, -10, -6, 6, 10, 15, 17 };
+const dPos ChessBoard::kAtk[8] = { 1, -1, 8, -8, 7, -7, 9, -9 };
 ChessBoard::ChessBoard() {//starting position
 	wTurn = true;
 	casRight = 0b1111;
@@ -16,7 +18,7 @@ ChessBoard::ChessBoard() {//starting position
 		i++;
 	}
 	while (i < 48) {
-		piece[i].type = pT::none;
+		piece[i] = { pT::none, false };
 		i++;
 	}
 	while (i < 56) {
@@ -178,8 +180,9 @@ int ChessBoard::evaluation() {
 			eval += piece[i].isW ? 900 : -900;
 			break;
 		default://king
-			if (isCheck(!wTurn, i))//illegal position
-				return wTurn ? maxInf : -maxInf;
+			if (piece[i].isW != wTurn)
+				if (isCheck(!wTurn, i))//illegal position
+					return wTurn ? maxInf : -maxInf;
 		}
 	}
 	if (insuff)
@@ -189,8 +192,11 @@ int ChessBoard::evaluation() {
 bool ChessBoard::isCheck(bool forW, byte kPos) {
 	if (kPos == 64) {//unknown
 		kPos = 0;
-		while (piece[kPos].type != pT::king || piece[kPos].isW != forW)
+		while (piece[kPos].type != pT::king || piece[kPos].isW != forW) {
 			kPos++;
+			if (kPos == 64)
+				return false;
+		}
 	}
 	byte currRank = posRank(kPos);
 	byte currFile = posFile(kPos);
@@ -292,16 +298,31 @@ byte ChessBoard::possibleMoves(Move* moves, Move* prev) {
 	byte first = 0;//piece move
 	byte mat = 0;
 	byte inBoard, tempB, currRank, currFile;
+	dPos forw;
 	for (byte i = 0; i < 64; i++) {
-		if (piece[i].isW != wTurn)
+		if (piece[i].isW != wTurn) {
+			switch (piece[i].type) {
+			case pT::none:
+			case pT::king:
+				break;
+			case pT::knight:
+			case pT::bishop:
+				mat++;
+				break;
+			default:
+				mat = 2;
+			}
 			continue;
+		}
 		currRank = posRank(i);
 		currFile = posFile(i);
 		switch (piece[i].type) {//-set end, castling, special, size, mat
 		case pT::none:
 			break;
 		case pT::pawn:
-			dPos forw = wTurn ? 8 : -8;
+			if (i < 8 || i > 55)
+				return byte(endState::illegal);
+			forw = wTurn ? 8 : -8;
 			if (piece[i + forw].type == pT::none) {
 				moves[size++].end = i + forw;
 				if (currRank == (wTurn ? 1 : 6))//could move 2 squares
@@ -432,29 +453,21 @@ byte ChessBoard::possibleMoves(Move* moves, Move* prev) {
 				if (checkNsave(moves, size, j += 1)) break;
 			for (byte j = i; posFile(j) != 0;)//L
 				if (checkNsave(moves, size, j -= 1)) break;
-			if (wTurn) {
-				switch (i) {
-				case 0:
-					tempB = casRight & 0b0010;
-					break;
-				case 7:
-					tempB = casRight & 0b0001;
-					break;
-				default:
-					tempB = 0;
-				}
-			}
-			else {
-				switch (i) {
-				case 56:
-					tempB = casRight & 0b1000;
-					break;
-				case 63:
-					tempB = casRight & 0b0100;
-					break;
-				default:
-					tempB = 0;
-				}
+			switch (i) {
+			case 0:
+				tempB = casRight & 0b0010;
+				break;
+			case 7:
+				tempB = casRight & 0b0001;
+				break;
+			case 56:
+				tempB = casRight & 0b1000;
+				break;
+			case 63:
+				tempB = casRight & 0b0100;
+				break;
+			default:
+				tempB = 0;
 			}
 			for (byte j = first; j < size; j++) {
 				moves[j].extra = 0;
@@ -518,13 +531,28 @@ byte ChessBoard::possibleMoves(Move* moves, Move* prev) {
 			break;
 		case pT::king:
 			return byte(endState::illegal);
+		case pT::rook://possible castling change
+			switch (moves[i].end) {
+			case 0:
+				moves[i].casChange += casRight & 0b0010;
+				break;
+			case 7:
+				moves[i].casChange += casRight & 0b0001;
+				break;
+			case 56:
+				moves[i].casChange += casRight & 0b1000;
+				break;
+			case 63:
+				moves[i].casChange += casRight & 0b0100;
+				break;
+			}
 		default://swap capture with first non capture
 			tempM = moves[i];
 			moves[i] = moves[first];
 			moves[first++] = tempM;
 		}
 	}
-	if (mat > 1)
+	if (mat < 2)
 		return byte(endState::insuff_mat);
 	return size;
 }
@@ -533,17 +561,17 @@ byte ChessBoard::legalMoves(Move* moves, Move* prev) {
 	if (size > maxMoves)//endState
 		return size;
 	byte i = 0;
-	Move tested;
+	bool result;
 	while (i < size) {
-		tested = moves[i];
-		doMove(tested);
-		if (isCheck(!wTurn)) {//remove illegal
+		doMove(moves[i]);
+		result = isCheck(!wTurn);
+		unMove(moves[i]);
+		if (result) {//remove illegal
 			size--;
 			moves[i] = moves[size];
 		}
 		else
 			i++;
-		unMove(tested);
 	}
 	if (!size) {//all possibles are illegal
 		if (isCheck(wTurn))
@@ -553,7 +581,7 @@ byte ChessBoard::legalMoves(Move* moves, Move* prev) {
 	}
 	return size;
 }
-int ChessBoard::deepEvaluation(byte depth, Move* prev) {
+int ChessBoard::deepEvaluation(byte depth, int prevEval, Move* prev) {
 	if (!depth)
 		return evaluation();
 	struct Node {
@@ -574,16 +602,23 @@ int ChessBoard::deepEvaluation(byte depth, Move* prev) {
 	}
 	byte lvl = 0;
 	hist[0].index = 0;
-	hist[0].bestEval = wTurn ? -maxInf : maxInf;
-	hist[0].minEval = -maxInf;
-	hist[0].maxEval = maxInf;
+	if (wTurn) {
+		hist[0].bestEval = -maxInf;
+		hist[0].minEval = -maxInf;
+		hist[0].maxEval = whiteConv(prevEval);
+	}
+	else {
+		hist[0].bestEval = maxInf;
+		hist[0].minEval = blackConv(prevEval);
+		hist[0].maxEval = maxInf;
+	}
 	while (true) {//explore downwards loop
 		doMove(hist[lvl++].getMove());
 		if (lvl == depth)
 			eval = evaluation();
 		else {
 			hist[lvl].size = possibleMoves(hist[lvl].moves, &hist[lvl - 1].getMove());
-			if (hist[lvl].size > maxMoves)
+			if (hist[lvl].size > maxMoves) 
 				eval = endEval(endState(hist[lvl].size));
 			else {//init node
 				hist[lvl].index = 0;
@@ -630,4 +665,19 @@ int ChessBoard::deepEvaluation(byte depth, Move* prev) {
 			}
 		}
 	}
+}
+std::ostream& operator<<(std::ostream& stream, const ChessBoard& data) {
+	static const char symbs[2][7] = {
+		{ '-', 'p', 'n', 'b', 'r', 'q', 'k' },
+		{ '-', 'P', 'N', 'B', 'R', 'Q', 'K' }
+	};
+	Piece current;
+	for (dPos r = 7; r >= 0; r--) {
+		for (dPos f = 0; f < 8; f++) {
+			current = data.piece[r * 8 + f];
+			stream << symbs[current.isW][byte(current.type)] << ' ';
+		}
+		stream << '\n';
+	}
+	return stream;
 }
