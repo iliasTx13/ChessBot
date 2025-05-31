@@ -1,9 +1,11 @@
 #include <iostream>
 #include <iomanip>
+#include <chrono>
 #include "board.h"
 #define maxStr 6
 using std::cout;
-bool strToByte(const char* inp, byte& outp, byte max = 255);
+using namespace std::chrono;
+bool strToInt(const char* inp, int& outp, byte maxDigits);
 bool strToMove(const char* inp, Move& outp);
 void moveToStr(const Move& inp, char* outp);
 bool userInp(char* inp);
@@ -12,17 +14,18 @@ int main() {
 	Move currentM;
 	ChessBoard* board = new ChessBoard;
 	Move* legals = new Move[maxMoves];
-	byte size, depth;
+	int minCalcTime;
 	bool botIsWhite;
-	cout << std::showpos << std::fixed << std::setprecision(3);//for eval
-	cout << "ChessBot v1.0 by iliasTx13\n";
+	cout << std::fixed << std::setprecision(3);//for eval
+	srand(steady_clock::now().time_since_epoch().count());//will overflow, dont care tho
+	cout << "ChessBot v1.1 by iliasTx13\n";
 	while (true) {
 		while (true) {
-			cout << "Set depth at: ";
+			cout << "Set min calculation time in ms: ";
 			if (userInp(str))
-				if (strToByte(str, depth))
+				if (strToInt(str, minCalcTime, 4))
 					break;
-			cout << "Declined: not an integer from 0 to 255\n";
+			cout << "Declined: not an integer from 0 to 9999\n";
 		}
 		while (true) {
 			cout << "Bot plays as: ";
@@ -40,11 +43,13 @@ int main() {
 		}
 		*board = ChessBoard();//starting position
 		cout << '\n' << *board << '\n';
-		size = board->legalMoves(legals);
+		byte depth = 6;//min starting depth
+		byte size = board->legalMoves(legals);
 		while (true) {//main game loop
 			if (board->wTurn == botIsWhite) {//bot's turn
 				int bestEval = board->wTurn ? -maxInf : maxInf;
 				int eval;
+				time_point startCalc = steady_clock::now();
 				for (byte i = 0; i < size; i++) {
 					board->doMove(legals[i]);
 					eval = board->deepEvaluation(depth, bestEval, &legals[i]);
@@ -54,6 +59,7 @@ int main() {
 						currentM = legals[i];
 					}
 				}
+				int calcTime = duration_cast<milliseconds>(steady_clock::now() - startCalc).count();
 				moveToStr(currentM, str);
 				cout << "Bot plays: " << str << '\n';
 				cout << "Evaluation: ";
@@ -62,8 +68,10 @@ int main() {
 				else if (bestEval < -minInf)
 					cout << "-M" << maxInf + bestEval;
 				else
-					cout << float(bestEval) / 100;
-				cout << '\n';
+					cout << std::showpos << float(bestEval) / 100 << std::noshowpos;
+				cout << " at depth " << int(depth) << " in " << calcTime << " ms\n";
+				if (calcTime < minCalcTime)
+					depth++;
 			}
 			else {//opp's turn
 				cout << "Opponent plays: ";
@@ -203,23 +211,17 @@ bool userInp(char* inp) {
 	}
 	exit(1);
 }
-bool strToByte(const char* inp, byte& outp, byte max) {
+bool strToInt(const char* inp, int& outp, byte maxDigits) {
 	if (inp[0] == '0')
 		if (inp[1] != '\0')
 			return false;//only 0 can start with 0
-	int result = 0;//int to avoid overflow
-	for (byte i = 0; i < 3;) {
+	int result = 0;
+	for (byte i = 0; i < maxDigits;) {
 		if (inp[i] < '0' || inp[i] > '9')
 			return false;
 		result = result * 10 + inp[i] - '0';
-		if (inp[++i] == '\0') {
-			if (result <= max) {
-				outp = result;
-				return true;
-			}
-			else
-				return false;
-		}
+		if (inp[++i] == '\0')
+			return true;
 	}
-	return false;//max 3 digits for byte
+	return false;//too many digits
 }

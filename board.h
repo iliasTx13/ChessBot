@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <iostream>
+#include <cstdlib>
 #define maxMoves 250//upper limit for possible moves
 #define maxInf 32000//eval for checkmate
 #define minInf 31000//max eval without checkmate in X (may not be enough for custom material)
@@ -55,12 +56,6 @@ inline byte posRank(byte pos) {
 }
 inline pT moveSpecial(byte extra) {
 	return pT(extra % 8);
-}
-inline int max(int a, int b) {
-	return a > b ? a : b;
-}
-inline int min(int a, int b) {
-	return a < b ? a : b;
 }
 inline int whiteConv(int eval) {//conversion to track white checkmate distance
 	return eval > minInf && eval != maxInf ? eval + 1 : eval;

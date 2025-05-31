@@ -560,18 +560,37 @@ byte ChessBoard::legalMoves(Move* moves, Move* prev) {
 	byte size = possibleMoves(moves, prev);
 	if (size > maxMoves)//endState
 		return size;
+	byte capturesSize = 0;
+	for (; capturesSize < size; capturesSize++)
+		if (!(moves[capturesSize].extra >> 3))//no capture
+			break;
+	bool illegal;
 	byte i = 0;
-	bool result;
-	while (i < size) {
+	while (i < capturesSize) {
 		doMove(moves[i]);
-		result = isCheck(!wTurn);
+		illegal = isCheck(!wTurn);
 		unMove(moves[i]);
-		if (result) {//remove illegal
-			size--;
-			moves[i] = moves[size];
+		if (illegal) {//remove and fill
+			moves[i] = moves[--capturesSize];
+			moves[capturesSize] = moves[--size];
 		}
 		else
 			i++;
+	}
+	byte randPos;
+	Move tempM;
+	while (i < size) {//i = capturesSize on enter
+		randPos = i + rand() % (size - i);//should set seed on main
+		doMove(moves[randPos]);
+		illegal = isCheck(!wTurn);
+		unMove(moves[randPos]);
+		if (illegal)//remove and fill
+			moves[randPos] = moves[--size];
+		else {//swap with i
+			tempM = moves[i];
+			moves[i++] = moves[randPos];
+			moves[randPos] = tempM;
+		}
 	}
 	if (!size) {//all possibles are illegal
 		if (isCheck(wTurn))
@@ -625,11 +644,11 @@ int ChessBoard::deepEvaluation(byte depth, int prevEval, Move* prev) {
 				if (wTurn) {
 					hist[lvl].bestEval = -maxInf;
 					hist[lvl].minEval = whiteConv(hist[lvl - 1].minEval);
-					hist[lvl].maxEval = whiteConv(min(hist[lvl - 1].maxEval, hist[lvl - 1].bestEval));
+					hist[lvl].maxEval = whiteConv(std::min(hist[lvl - 1].maxEval, hist[lvl - 1].bestEval));
 				}
 				else {
 					hist[lvl].bestEval = maxInf;
-					hist[lvl].minEval = blackConv(max(hist[lvl - 1].minEval, hist[lvl - 1].bestEval));
+					hist[lvl].minEval = blackConv(std::max(hist[lvl - 1].minEval, hist[lvl - 1].bestEval));
 					hist[lvl].maxEval = blackConv(hist[lvl - 1].maxEval);
 				}
 				continue;//no eval yet
@@ -638,7 +657,7 @@ int ChessBoard::deepEvaluation(byte depth, int prevEval, Move* prev) {
 		while (true) {//calculate upwards loop
 			unMove(hist[--lvl].getMove());
 			if (wTurn) {
-				hist[lvl].bestEval = max(hist[lvl].bestEval, eval);
+				hist[lvl].bestEval = std::max(hist[lvl].bestEval, eval);
 				if (++hist[lvl].index != hist[lvl].size && hist[lvl].bestEval < hist[lvl].maxEval)
 					break;//need more evals
 				eval = hist[lvl].bestEval;
@@ -649,7 +668,7 @@ int ChessBoard::deepEvaluation(byte depth, int prevEval, Move* prev) {
 						eval = 0;
 			}
 			else {
-				hist[lvl].bestEval = min(hist[lvl].bestEval, eval);
+				hist[lvl].bestEval = std::min(hist[lvl].bestEval, eval);
 				if (++hist[lvl].index != hist[lvl].size && hist[lvl].bestEval > hist[lvl].minEval)
 					break;//need more evals
 				eval = hist[lvl].bestEval;
